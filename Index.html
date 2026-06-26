@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>KuKirin BLE</title>
+<style>
+body{background:#111;color:#fff;font-family:sans-serif;padding:20px}
+button{width:100%;padding:15px;margin:6px 0;font-size:18px}
+pre{background:#222;padding:10px;white-space:pre-wrap}
+</style>
+</head>
+<body>
+
+<h2>KuKirin BLE</h2>
+
+<button onclick="connect()">Connect</button>
+<button onclick="send('F041')">Unlock</button>
+<button onclick="send('F042')">Lock</button>
+<button onclick="send('F04C3003')">Acceleration 3</button>
+
+<input id="hex" placeholder="F04C2101" style="width:100%;padding:10px">
+<button onclick="send(document.getElementById('hex').value)">Send Hex</button>
+
+<pre id="log"></pre>
+
+<script>
+let writeChar;
+
+function hexToBytes(hex){
+  hex=hex.replace(/\s/g,'');
+  let a=new Uint8Array(hex.length/2);
+  for(let i=0;i<a.length;i++)
+    a[i]=parseInt(hex.substr(i*2,2),16);
+  return a;
+}
+
+function bytesToHex(buf){
+  return [...new Uint8Array(buf)]
+    .map(x=>x.toString(16).padStart(2,'0'))
+    .join(' ');
+}
+
+async function connect(){
+  const device=await navigator.bluetooth.requestDevice({
+    acceptAllDevices:true,
+    optionalServices:['0000fff0-0000-1000-8000-00805f9b34fb']
+  });
+
+  const server=await device.gatt.connect();
+  const service=await server.getPrimaryService('0000fff0-0000-1000-8000-00805f9b34fb');
+
+  writeChar=await service.getCharacteristic('0000fff1-0000-1000-8000-00805f9b34fb');
+
+  const notify=await service.getCharacteristic('0000fff2-0000-1000-8000-00805f9b34fb');
+
+  await notify.startNotifications();
+
+  notify.addEventListener('characteristicvaluechanged',e=>{
+    log("RX: "+bytesToHex(e.target.value.buffer));
+  });
+
+  log("Connected");
+}
+
+async function send(hex){
+  if(!writeChar){
+    alert("Connect first");
+    return;
+  }
+  await writeChar.writeValue(hexToBytes(hex));
+  log("TX: "+hex);
+}
+
+function log(t){
+  document.getElementById("log").textContent += t + "\n";
+}
+</script>
+
+</body>
+</html>
